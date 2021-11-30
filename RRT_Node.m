@@ -7,6 +7,8 @@ classdef RRT_Node < handle
         parent
         children
         hasParent
+        robust
+        dist
     end
     methods
         function node = RRT_Node(coords, parentNode)
@@ -14,6 +16,8 @@ classdef RRT_Node < handle
             node.parent = parentNode;
             node.children = [];
             node.hasParent = 1;
+            node.robust = 0;
+            node.dist = 0;
         end
     end
 end
