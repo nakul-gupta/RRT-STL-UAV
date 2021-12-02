@@ -30,9 +30,10 @@ qrss = stateSpaceSE3([0 200; 0 200; 100 200; ...
     Inf Inf]);
 
 sv = validatorOccupancyMap3D(qrss,"Map",omap);
-sv.ValidationDistance = 0.1;
+%sv.ValidationDistance = 0.1;
+sv.ValidationDistance = 5;
 
-[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20);
+[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap);
 %planner = plannerRRT(qrss,sv);
 %planner.MaxConnectionDistance = 50;
 %planner.GoalBias = 0.10;  
@@ -109,9 +110,9 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
             unit_v = (sample-neighbors(i).state)/norm(sample-neighbors(i).state);
             new_node_state = neighbors(i).state + step_size*unit_v;
             
-            if isStateValid(sv, new_node_state)
-                
-                
+            if isStateValid(sv, new_node_state) == 0
+            %if checkOccupancy(omap, [new_node_state(1),new_node_state(2),new_node_state(3)])
+               
                 possible_path = [new_node_state];
                 current = neighbors(i);
                 while current.hasParent
@@ -120,16 +121,32 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
                 end
                 %add start node since there is no do-while in matlab
                 possible_path = [possible_path; startPose];
-                possible_path = flip(possible_path);
+                [distance_arr] = distanceCalculator(possible_path, omap);
                 
-                
-
-                %robust calculator
-                %if size(possible_path,1) < shortest_length
-                %    shortest_length = size(possible_path,1);
-                    %max_robust_index = i;
-                    
-                %end
+%                 distance_arr = [];
+%                 for d = 1:size(possible_path,1)
+%                     min_ray_dist = inf;
+%                     numRays = 10;
+%                     angles = linspace(-2*pi,2*pi,numRays);
+% 
+%                     directions_pitch = [cos(angles); zeros(1,numRays); sin(angles)]';
+%                     directions_roll = [zeros(1,numRays); sin(angles); cos(angles)]';
+%                     directions_yaw = [cos(angles); sin(angles); zeros(1,numRays)]';
+%                     maxrange = 50;
+%                     [intersectionPts_p,isOccupied_p] = rayIntersection(omap,possible_path(d,:),directions_pitch,maxrange);
+%                     [intersectionPts_r,isOccupied_r] = rayIntersection(omap,possible_path(d,:),directions_roll,maxrange);
+%                     [intersectionPts_y,isOccupied_y] = rayIntersection(omap,possible_path(d,:),directions_yaw,maxrange);
+% 
+%                     for n = 1:numRays
+%                         if isOccupied_p(n)
+%                             ray_dist = norm(intersectionPts_p - possible_path(d,:));
+%                             if dist < min_ray_dist
+%                                 min_ray_dist = ray_dist;
+%                             end
+%                         end
+%                     end
+%                     distance_arr = [distance_arr; min_ray_dist];
+%                 end
 
                 for l = 1:size(possible_path,1)
                     if u_z_min > upper_z - possible_path(l,3)
@@ -169,8 +186,8 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
 %         if isValid == 0
 %             disp("error");
 %         end
-        isValid = checkOccupancy(omap, [new_node.state(1),new_node.state(2),new_node.state(3)])
-        if isValid == 0
+        isValid = checkOccupancy(omap, [new_node.state(1),new_node.state(2),new_node.state(3)]);
+        if isValid == 1
             disp("error");
         end
 
@@ -224,6 +241,56 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
     
     pthObj.States = path;
 end
+
+function [distance_arr] = distanceCalculator(possible_path, omap)
+    distance_arr = [];
+    for d = 1:size(possible_path,1)
+        min_ray_dist = inf;
+        %min_ray_arr = zeros(3);
+        min_ray_arr = [];
+        numRays = 10;
+        angles = linspace(-2*pi,2*pi,numRays);
+    
+        directions_pitch = [cos(angles); zeros(1,numRays); sin(angles)]';
+        directions_roll = [zeros(1,numRays); sin(angles); cos(angles)]';
+        directions_yaw = [cos(angles); sin(angles); zeros(1,numRays)]';
+        maxrange = 50;
+        [intersectionPts_p,isOccupied_p] = rayIntersection(omap,possible_path(d,:),directions_pitch,maxrange);
+        [intersectionPts_r,isOccupied_r] = rayIntersection(omap,possible_path(d,:),directions_roll,maxrange);
+        [intersectionPts_y,isOccupied_y] = rayIntersection(omap,possible_path(d,:),directions_yaw,maxrange);
+
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_p, numRays, isOccupied_p, min_ray_dist, d)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_r, numRays, isOccupied_r, min_ray_dist, d)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_y, numRays, isOccupied_y, min_ray_dist, d)];
+        distance_arr = [distance_arr; min(min_ray_arr)];
+
+    
+%         for n = 1:numRays
+%             if isOccupied_p(n)
+%                 ray_dist = norm(intersectionPts_p - possible_path(d,:));
+%                 if dist < min_ray_dist
+%                     min_ray_dist = ray_dist;
+%                 end
+%             end
+%         end
+        %distance_arr = [distance_arr; min_ray_dist];
+    end
+end
+
+
+
+
+function [min_ray_dist] = distanceRobustness(possible_path, intersectionPts, numRays, isOccupied, min_ray_dist, index)
+    for n = 1:numRays
+        if isOccupied(n)
+            ray_dist = norm(intersectionPts(n, :) - [possible_path(index,1), possible_path(index,2), possible_path(index,3)]);
+            if ray_dist < min_ray_dist
+                min_ray_dist = ray_dist;
+            end
+        end
+    end
+end
+
 
 function [neighbors] = biasStep(startingNode, sample, k, bias, threshold)
     neighbors = [];

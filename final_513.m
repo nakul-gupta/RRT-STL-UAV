@@ -77,10 +77,10 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
     goalNode = RRT_Node(goalPose, NaN);
     goalNode.hasParent = 0;
     path = [];
-    total_nodes = 1;
     solnInfo.IsPathFound = 0;
     %when using a value of 8, we break through objects
-    threshold = 8;
+    %solved this by changing boolean of "isStateValid"
+    threshold = 1;
     upper_z = 150;
     lower_z = 50;
     lateral_bound = 20;
@@ -121,16 +121,8 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
                 end
                 %add start node since there is no do-while in matlab
                 possible_path = [possible_path; startPose];
-                possible_path = flip(possible_path);
-                
-                
-
-                %robust calculator
-                %if size(possible_path,1) < shortest_length
-                %    shortest_length = size(possible_path,1);
-                    %max_robust_index = i;
-                    
-                %end
+                [distance_arr] = distanceCalculator(possible_path, omap, lateral_bound);
+                shortest_distance = min(distance_arr);
 
                 for l = 1:size(possible_path,1)
                     if u_z_min > upper_z - possible_path(l,3)
@@ -147,7 +139,7 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
 %                        max_robust_index = i;
 %                 end
                 shortest_length = size(possible_path,1);
-                robustnessArr = [robustnessArr; vertical_robustness - shortest_length];
+                robustnessArr = [robustnessArr; vertical_robustness - shortest_length + shortest_distance];
             end
         end
 
@@ -163,8 +155,6 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
 
         %% add new node
         unit_v = (sample-neighbors(max_robust_index).state)/norm(sample-neighbors(max_robust_index).state);
-        %new_node_state = neighbors(i).state + step_size*unit_v;
-        %neighbors(max_robust_index).state + step_size*unit_v
         new_node = RRT_Node(neighbors(max_robust_index).state + step_size*unit_v, neighbors(max_robust_index));
 %         isValid = isStateValid(sv, new_node.state);
 %         if isValid == 0
@@ -225,6 +215,57 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
     
     pthObj.States = path;
 end
+
+function [distance_arr] = distanceCalculator(possible_path, omap, lateral_bound)
+    distance_arr = [];
+    for d = 1:size(possible_path,1)
+        
+        %min_ray_arr = zeros(3);
+        min_ray_arr = [];
+        numRays = 10;
+        angles = linspace(-2*pi,2*pi,numRays);
+    
+        directions_pitch = [cos(angles); zeros(1,numRays); sin(angles)]';
+        directions_roll = [zeros(1,numRays); sin(angles); cos(angles)]';
+        directions_yaw = [cos(angles); sin(angles); zeros(1,numRays)]';
+        maxrange = 50;
+        [intersectionPts_p,isOccupied_p] = rayIntersection(omap,possible_path(d,:),directions_pitch,maxrange);
+        [intersectionPts_r,isOccupied_r] = rayIntersection(omap,possible_path(d,:),directions_roll,maxrange);
+        [intersectionPts_y,isOccupied_y] = rayIntersection(omap,possible_path(d,:),directions_yaw,maxrange);
+
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_p, numRays, isOccupied_p, lateral_bound, d)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_r, numRays, isOccupied_r, lateral_bound, d)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_y, numRays, isOccupied_y, lateral_bound, d)];
+        distance_arr = [distance_arr; min(min_ray_arr)];
+
+    
+%         for n = 1:numRays
+%             if isOccupied_p(n)
+%                 ray_dist = norm(intersectionPts_p - possible_path(d,:));
+%                 if dist < min_ray_dist
+%                     min_ray_dist = ray_dist;
+%                 end
+%             end
+%         end
+        %distance_arr = [distance_arr; min_ray_dist];
+    end
+end
+
+
+
+
+function [min_ray_dist] = distanceRobustness(possible_path, intersectionPts, numRays, isOccupied, lateral_bound, index)
+min_ray_dist = inf;
+    for n = 1:numRays
+        if isOccupied(n)
+            ray_dist = norm(intersectionPts(n, :) - [possible_path(index,1), possible_path(index,2), possible_path(index,3)]) - lateral_bound;
+            if ray_dist < min_ray_dist
+                min_ray_dist = ray_dist;
+            end
+        end
+    end
+end
+
 
 function [neighbors] = biasStep(startingNode, sample, k, bias, threshold)
     neighbors = [];
