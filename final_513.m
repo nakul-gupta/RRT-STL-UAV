@@ -1,3 +1,7 @@
+%% Set Up
+%clc
+%close all;
+
 %% Set RNG seed for repeatable result
 rng(1,"twister");
 
@@ -33,14 +37,17 @@ sv = validatorOccupancyMap3D(qrss,"Map",omap);
 %sv.ValidationDistance = 0.1;
 sv.ValidationDistance = 5;
 
-[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap);
-%planner = plannerRRT(qrss,sv);
-%planner.MaxConnectionDistance = 50;
-%planner.GoalBias = 0.10;  
-%planner.MaxIterations = 400;
-%planner.GoalReachedFcn = @(~,x,y)(norm(x(1:3)-y(1:3)) < 5);
+%% Parameters
+threshold = 0;
+upper_z = 150;
+lower_z = 50;
+lateral_bound = 20;
 
-%[pthObj,solnInfo] = plan(planner,startPose,goalPose);
+%% RRT
+[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+    threshold, upper_z, lower_z, lateral_bound);
+
+%% Error checking
 for i = 1:size(path)-1
 
     isValid = isMotionValid(sv, path(i).state, path(i+1).state);
@@ -49,6 +56,13 @@ for i = 1:size(path)-1
     end
 end
 
+%% Final Robustness
+robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+    upper_z, lower_z);
+disp("robustness: ");
+disp(robustness);
+
+%% Plot
 if (solnInfo.IsPathFound)
     figure("Name","OriginalPath")
     % Visualize the 3-D map
@@ -70,7 +84,8 @@ end
 %% Functions
 
 
-function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, step_size, omap)
+function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, ...
+    max_iter, step_size, omap, threshold, upper_z, lower_z, lateral_bound)
     
     startingNode = RRT_Node(startPose, NaN);
     startingNode.hasParent = 0;
@@ -78,15 +93,10 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
     goalNode.hasParent = 0;
     path = [];
     solnInfo.IsPathFound = 0;
-    %when using a value of 8, we break through objects
-    %solved this by changing boolean of "isStateValid"
-    threshold = 1;
-    upper_z = 150;
-    lower_z = 50;
-    lateral_bound = 20;
+
 
     for k = 1:max_iter
-        %% random sample
+        % random sample
         sample = zeros(1,ss.NumStateVariables);
         for i = 1:ss.NumStateVariables
             if i <= 3
@@ -94,19 +104,19 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
             end
         end
     
-        %% get 10 nearest neighbors
+        % get 10 nearest neighbors
         bias = randsample(11, 1);
         [neighbors] = biasStep(startingNode, sample, k, bias, threshold);
 
-        %% extend sample, check for completion, and trace back
+        % extend sample, check for completion, and trace back
         
         robustnessArr = [];
         shortest_length = inf;
         max_vert_robustness = -inf;
         for i= 1:size(neighbors,2)
             
-            u_z_min = inf;
-            l_z_min = inf;
+%             u_z_min = inf;
+%             l_z_min = inf;
             unit_v = (sample-neighbors(i).state)/norm(sample-neighbors(i).state);
             new_node_state = neighbors(i).state + step_size*unit_v;
             
@@ -121,29 +131,32 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
                 end
                 %add start node since there is no do-while in matlab
                 possible_path = [possible_path; startPose];
-                [distance_arr] = distanceCalculator(possible_path, omap, lateral_bound);
-                shortest_distance = min(distance_arr);
+                robustnessVal = robustnessCalculator(possible_path, omap, lateral_bound, upper_z, lower_z);
+                robustnessArr = [robustnessArr; robustnessVal];
 
-                for l = 1:size(possible_path,1)
-                    if u_z_min > upper_z - possible_path(l,3)
-                        u_z_min = upper_z -possible_path(l,3);
-                    end
-
-                    if l_z_min > possible_path(l,3) - lower_z
-                        l_z_min = possible_path(l,3) - lower_z;
-                    end
-                end
-                vertical_robustness = u_z_min + l_z_min;
-%                 if vertical_robustness > max_vert_robustness
-%                        max_vert_robustness = vertical_robustness;
-%                        max_robust_index = i;
+%                 [distance_arr] = distanceCalculator(possible_path, omap, lateral_bound);
+%                 shortest_distance = min(distance_arr);
+% 
+%                 for l = 1:size(possible_path,1)
+%                     if u_z_min > upper_z - possible_path(l,3)
+%                         u_z_min = upper_z -possible_path(l,3);
+%                     end
+% 
+%                     if l_z_min > possible_path(l,3) - lower_z
+%                         l_z_min = possible_path(l,3) - lower_z;
+%                     end
 %                 end
-                shortest_length = size(possible_path,1);
-                robustnessArr = [robustnessArr; vertical_robustness - shortest_length + shortest_distance];
+%                 vertical_robustness = u_z_min + l_z_min;
+% %                 if vertical_robustness > max_vert_robustness
+% %                        max_vert_robustness = vertical_robustness;
+% %                        max_robust_index = i;
+% %                 end
+%                 shortest_length = size(possible_path,1);
+%                robustnessArr = [robustnessArr; vertical_robustness - shortest_length + shortest_distance];
             end
         end
 
-        %% scan robustness array
+        % scan robustness array
         max_robust_index = 1;
         max_robustness_val = -inf;
         for x = 1:size(robustnessArr)
@@ -153,7 +166,7 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
         end
 
 
-        %% add new node
+        % add new node
         unit_v = (sample-neighbors(max_robust_index).state)/norm(sample-neighbors(max_robust_index).state);
         new_node = RRT_Node(neighbors(max_robust_index).state + step_size*unit_v, neighbors(max_robust_index));
 %         isValid = isStateValid(sv, new_node.state);
@@ -215,6 +228,31 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, max_iter, ste
     
     pthObj.States = path;
 end
+
+function [robustnessValue] = robustnessCalculator(path, omap, lateral_bound, upper_z, lower_z)
+
+    u_z_min = inf;
+    l_z_min = inf;
+
+    [distance_arr] = distanceCalculator(path, omap, lateral_bound);
+
+    shortest_distance = min(distance_arr);
+
+    for l = 1:size(path,1)
+        if u_z_min > upper_z - path(l,3)
+            u_z_min = upper_z - path(l,3);
+        end
+
+        if l_z_min > path(l,3) - lower_z
+            l_z_min = path(l,3) - lower_z;
+        end
+    end
+    vertical_robustness = u_z_min + l_z_min;
+    shortest_length = size(path,1);
+    robustnessValue = vertical_robustness - shortest_length + shortest_distance;
+end
+
+
 
 function [distance_arr] = distanceCalculator(possible_path, omap, lateral_bound)
     distance_arr = [];
