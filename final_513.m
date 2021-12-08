@@ -10,7 +10,7 @@ omap = mapData.omap;
 % Consider unknown spaces to be unoccupied
 omap.FreeThreshold = omap.OccupiedThreshold;
 %With or without inflate?
-inflate(omap,1);
+%inflate(omap,1);
 
 startPose = [12 22 70 0 0 0 1];
 goalPose = [150 180 120 0 0 0 1];
@@ -38,14 +38,14 @@ sv = validatorOccupancyMap3D(qrss,"Map",omap);
 sv.ValidationDistance = 5;
 
 %% Parameters
-threshold = 0;
+threshold = 12;
 upper_z = 150;
 lower_z = 50;
 lateral_bound = 10;
 num_neighbors = 20;
 
 %% RRT
-%[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+% [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
 %    threshold, upper_z, lower_z, lateral_bound, num_neighbors);
 
 %% Error checking
@@ -62,21 +62,29 @@ num_neighbors = 20;
 % end
 
 %% Final Robustness
-%robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+% robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
 %    upper_z, lower_z);
-%disp("robustness for threshold 1: ");
-%disp(robustness);
-
-for i = 1:11
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-    i, upper_z, lower_z, lateral_bound, num_neighbors);
-    
-    robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-    upper_z, lower_z);
-    
-    fprintf('robustness for threshold %d: %.2f\n', i, robustness);
-    %disp(robustness);
-%end
+% disp("robustness for threshold 1: ");
+% disp(robustness);
+plotting_data = [];
+for j = 5:25
+    for i = 1:11
+        [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        i, upper_z, lower_z, lateral_bound, j);
+        
+        robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+        
+        %fprintf('robustness for threshold %d and number of neighbors %d: %.2f\n', i, j, robustness);
+        %disp(robustness);
+        plotting_data = [plotting_data; [robustness, i, j]];
+    end
+    disp(j);
+end
+%[X,Y] = meshgrid(1:1:66, 1:1:66);
+%surf(X, Y, plotting_data(:,1));
+scatter3(plotting_data(:,3), plotting_data(:,2), plotting_data(:,1), "filled");
+writematrix(plotting_data, 'plotted_data.xls');
 
 %     %% Plot
 %     if (solnInfo.IsPathFound)
@@ -96,7 +104,7 @@ for i = 1:11
 %         hold off
 %         view([-31 63])
 %     end
-end
+%end
 
 %% Functions
 
