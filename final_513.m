@@ -12,16 +12,16 @@ omap.FreeThreshold = omap.OccupiedThreshold;
 %With or without inflate?
 inflate(omap,1);
 
-startPose = [12 22 60 0 0 0 1];
-goalPose = [150 180 130 0 0 0 1];
+startPose = [12 22 70 0 0 0 1];
+goalPose = [150 180 120 0 0 0 1];
 %goalPose = [150 40 100 0 0 0 1];
-figure("Name","StartAndGoal")
-hMap = show(omap);
-hold on
-scatter3(hMap,startPose(1),startPose(2),startPose(3),30,"red","filled")
-scatter3(hMap,goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
-hold off
-view([-31 63])
+% figure("Name","StartAndGoal")
+% hMap = show(omap);
+% hold on
+% scatter3(hMap,startPose(1),startPose(2),startPose(3),30,"red","filled")
+% scatter3(hMap,goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
+% hold off
+% view([-31 63])
 
 %% custom state space -> we have to see about validator map
 % custom STL-RRT compared agaisnt the out of the box RRT
@@ -39,14 +39,14 @@ sv.ValidationDistance = 5;
 
 %% Parameters
 threshold = 0;
-upper_z = 100;
-lower_z = 80;
-lateral_bound = 40;
-num_neighbors = 25;
+upper_z = 150;
+lower_z = 50;
+lateral_bound = 10;
+num_neighbors = 20;
 
 %% RRT
-[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-    threshold, upper_z, lower_z, lateral_bound, num_neighbors);
+%[pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%    threshold, upper_z, lower_z, lateral_bound, num_neighbors);
 
 %% Error checking
 
@@ -62,28 +62,40 @@ num_neighbors = 25;
 % end
 
 %% Final Robustness
-robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-    upper_z, lower_z);
-disp("robustness: ");
-disp(robustness);
+%robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%    upper_z, lower_z);
+%disp("robustness for threshold 1: ");
+%disp(robustness);
 
-%% Plot
-if (solnInfo.IsPathFound)
-    figure("Name","OriginalPath")
-    % Visualize the 3-D map
-    show(omap)
-    hold on
-    scatter3(startPose(1),startPose(2),startPose(3),30,"red","filled")
-    scatter3(goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
+for i = 1:11
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+    i, upper_z, lower_z, lateral_bound, num_neighbors);
     
-    hReference = plot3(pthObj.States(:,1), ...
-        pthObj.States(:,2), ...
-        pthObj.States(:,3), ...
-        "LineWidth",2,"Color","g");
-  
-    legend(hReference,"Reference","Location","best")
-    hold off
-    view([-31 63])
+    robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+    upper_z, lower_z);
+    
+    fprintf('robustness for threshold %d: %.2f\n', i, robustness);
+    %disp(robustness);
+%end
+
+%     %% Plot
+%     if (solnInfo.IsPathFound)
+%         figure("Name","OriginalPath")
+%         % Visualize the 3-D map
+%         show(omap)
+%         hold on
+%         scatter3(startPose(1),startPose(2),startPose(3),30,"red","filled")
+%         scatter3(goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
+%         
+%         hReference = plot3(pthObj.States(:,1), ...
+%             pthObj.States(:,2), ...
+%             pthObj.States(:,3), ...
+%             "LineWidth",2,"Color","g");
+%       
+%         legend(hReference,"Reference","Location","best")
+%         hold off
+%         view([-31 63])
+%     end
 end
 
 %% Functions
@@ -110,7 +122,7 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, ...
         end
     
         % get 10 nearest neighbors
-        bias = randsample(11, 1);
+        bias = randsample(10, 1);
         [neighbors] = biasStep(startingNode, sample, k, bias, threshold, num_neighbors);
         saved_new_nodes = [];
         null_node_state = [0, 0, 0, 0, 0, 0, 0];
@@ -118,25 +130,23 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, ...
         % extend sample, check for completion, and trace back
         
         robustnessArr = [];
-        shortest_length = inf;
-        max_vert_robustness = -inf;
         for i= 1:size(neighbors,2)
             unit_v = (sample-neighbors(i).state)/norm(sample-neighbors(i).state);
             new_node_state = neighbors(i).state + step_size*unit_v;
             
             
-            if isStateValid(sv, new_node_state) && isMotionValid(sv, neighbors(i).state, new_node_state);
+            if isStateValid(sv, new_node_state) && isMotionValid(sv, neighbors(i).state, new_node_state)
                 saved_new_nodes = [saved_new_nodes; new_node_state];
 
                
                 possible_path = [new_node_state];
-                current = neighbors(i);
-                while current.hasParent
-                    possible_path = [possible_path; current.state];
-                    current = current.parent;
-                end
+%                current = neighbors(i);
+%                 while current.hasParent
+%                     possible_path = [possible_path; current.state];
+%                     current = current.parent;
+%                 end
                 %add start node since there is no do-while in matlab
-                possible_path = [possible_path; startPose];
+                %possible_path = [possible_path; startPose];
                 robustnessVal = robustnessCalculator(possible_path, omap, lateral_bound, upper_z, lower_z);
                 robustnessArr = [robustnessArr; robustnessVal];
             else
@@ -201,8 +211,8 @@ function [robustnessValue] = robustnessCalculator(path, omap, lateral_bound, upp
         end
     end
     vertical_robustness = u_z_min + l_z_min;
-    %shortest_length = size(path,1);
     robustnessValue = vertical_robustness + shortest_distance;
+    %robustnessValue = min([shortest_distance, l_z_min, u_z_min]);
 end
 
 
