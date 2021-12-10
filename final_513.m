@@ -3,7 +3,7 @@
 %close all;
 
 %% Set RNG seed for repeatable result
-rng(1,"twister");
+%rng(1,"twister");
 
 mapData = load("uavMapCityBlock.mat","omap");
 omap = mapData.omap;
@@ -12,16 +12,18 @@ omap.FreeThreshold = omap.OccupiedThreshold;
 %With or without inflate?
 %inflate(omap,1);
 
-startPose = [12 22 70 0 0 0 1];
-goalPose = [150 180 120 0 0 0 1];
-%goalPose = [150 40 100 0 0 0 1];
-% figure("Name","StartAndGoal")
-% hMap = show(omap);
-% hold on
-% scatter3(hMap,startPose(1),startPose(2),startPose(3),30,"red","filled")
-% scatter3(hMap,goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
-% hold off
-% view([-31 63])
+startPose = [194 107 20 0 0 0 1];
+dropOffPose = [94 156 52 0 0 0 1];
+goalPose = [76 40 70 0 0 0 1];
+
+figure("Name","StartAndGoal")
+hMap = show(omap);
+hold on
+scatter3(hMap,startPose(1),startPose(2),startPose(3),30,"red","filled")
+scatter3(hMap,dropOffPose(1),dropOffPose(2),dropOffPose(3),30,"blue","filled")
+scatter3(hMap,goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
+hold off
+view([-31 63])
 
 %% custom state space -> we have to see about validator map
 % custom STL-RRT compared agaisnt the out of the box RRT
@@ -38,10 +40,10 @@ sv = validatorOccupancyMap3D(qrss,"Map",omap);
 sv.ValidationDistance = 5;
 
 %% Parameters
-threshold = 12;
-upper_z = 150;
-lower_z = 50;
-lateral_bound = 10;
+threshold = .5;
+upper_z = 120;
+lower_z = 8;
+lateral_bound = 8;
 num_neighbors = 20;
 
 %% RRT
@@ -67,8 +69,14 @@ num_neighbors = 20;
 % disp("robustness for threshold 1: ");
 % disp(robustness);
 plotting_data = [];
-for j = 5:25
-    for i = 1:11
+starting_thresh = 1;
+ending_thresh = 11;
+num_neighbors_start = 5;
+num_neighbors_end = 10;
+matrix_data = zeros(num_neighbors_end-num_neighbors_start+1,11);
+
+for j = num_neighbors_start:num_neighbors_end
+    for i = starting_thresh:ending_thresh
         [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
         i, upper_z, lower_z, lateral_bound, j);
         
@@ -78,13 +86,16 @@ for j = 5:25
         %fprintf('robustness for threshold %d and number of neighbors %d: %.2f\n', i, j, robustness);
         %disp(robustness);
         plotting_data = [plotting_data; [robustness, i, j]];
+        matrix_data(j-4,i) = robustness;
     end
     disp(j);
 end
-%[X,Y] = meshgrid(1:1:66, 1:1:66);
-%surf(X, Y, plotting_data(:,1));
-scatter3(plotting_data(:,3), plotting_data(:,2), plotting_data(:,1), "filled");
-writematrix(plotting_data, 'plotted_data.xls');
+[X,Y] = meshgrid(starting_thresh:ending_thresh,num_neighbors_start:num_neighbors_end);
+%X = num_neighbors_start:num_neighbors_end;
+%Y = starting_thresh:ending_thresh;
+surf(X, Y, matrix_data);
+%scatter3(plotting_data(:,3), plotting_data(:,2), plotting_data(:,1), "filled");
+%writematrix(plotting_data, 'plotted_data.xls');
 
 %     %% Plot
 %     if (solnInfo.IsPathFound)
@@ -130,7 +141,7 @@ function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, ...
         end
     
         % get 10 nearest neighbors
-        bias = randsample(10, 1);
+        bias = rand();
         [neighbors] = biasStep(startingNode, sample, k, bias, threshold, num_neighbors);
         saved_new_nodes = [];
         null_node_state = [0, 0, 0, 0, 0, 0, 0];

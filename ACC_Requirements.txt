@@ -1,0 +1,23 @@
+param dsafe = 2
+param T = 50
+
+# cars follow at safe distance
+safeGap := (LeadPosition[t] - HostPosition[t] >= dSafe)
+safeFollowing := alw_[0,T] (safeGap)
+
+# host car does not go backward
+forwardProgress := alw_[0,T] (HostVelocity[t] >= 0)
+
+# it's not the case that host car just arbitrarily stops without the lead car having stopped first
+param reallySmallSpeed = 0.1
+dontStopUnlessLeadStops := not((LeadVelocity[t] > reallySmallSpeed) until_[0,T] (HostVelocity[t] < reallySmallSpeed))
+
+
+# Reach target speed unless the ego is too close to the ado
+param cruiseSpeed = 20
+param smallEnoughDistance = 20.0
+param largeEnoughDistance = 50.0
+param reachWithin = 10
+param closeEnough = 1.0
+
+reachTargetUnlessUnsafe := alw_[0,T] ((LeadPosition[t] - HostPosition[t] >= largeEnoughDistance) => ev_[0,reachWithin] ((abs(HostVelocity[t] - cruiseSpeed) < closeEnough) or (abs(LeadPosition[t] - HostPosition[t]) < smallEnoughDistance)))
