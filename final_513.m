@@ -39,6 +39,10 @@ sv = validatorOccupancyMap3D(qrss,"Map",omap);
 %sv.ValidationDistance = 0.1;
 sv.ValidationDistance = 5;
 
+% threshold_o = [(goalPose-0.5)' (goalPose+0.5)'; -pi pi];
+% setWorkspaceGoalRegion(qrss,goalPose,threshold_o);
+
+
 %% Parameters
 threshold = .5;
 upper_z = 120;
@@ -63,39 +67,67 @@ num_neighbors = 20;
 %     end
 % end
 
+%% means
+means = mean(robustness_matrix);
+writematrix(robustness_matrix, 'robustness_matrix.xls');
+
 %% Final Robustness
 % robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
 %     upper_z, lower_z);
-robustness_matrix = zeros(50,7);
-for c = 1:50
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        0, upper_z, lower_z, lateral_bound, 20);
-    robustness_matrix(c,1) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        .25, upper_z, lower_z, lateral_bound, 20);
-    robustness_matrix(c,2) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        .5, upper_z, lower_z, lateral_bound, 20);
-    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        .75, upper_z, lower_z, lateral_bound, 20);
-    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        1, upper_z, lower_z, lateral_bound, 20);
-    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
-    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        .5, upper_z, lower_z, lateral_bound, 20);
-    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
+% M_RRT = plannerRRT(qrss,sv);
+% M_RRT.MaxConnectionDistance = 20;
+% M_RRT.GoalBias = 0.10;  
+% M_RRT.MaxIterations = 4000;
+% M_RRT.GoalReachedFcn = @(~,x,y)(norm(x(1:3)-y(1:3)) < 5);
+% 
+% M_RRT_S = plannerRRTStar(qrss,sv);
+% M_RRT_S.MaxConnectionDistance = 20;
+% M_RRT_S.GoalBias = 0.10;  
+% M_RRT_S.MaxIterations = 4000;
+% M_RRT_S.GoalReachedFcn = @(~,x,y)(norm(x(1:3)-y(1:3)) < 5);
+% robustness_matrix = zeros(50,7);
+% for c = 1:200
+%     [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%         0, upper_z, lower_z, lateral_bound, num_neighbors);
+%     robustness_matrix(c,1) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%         upper_z, lower_z);
+%     disp(robustness_matrix(c,1));
+%     [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%         .25, upper_z, lower_z, lateral_bound, num_neighbors);
+%     robustness_matrix(c,2) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%         upper_z, lower_z);
+%     disp(robustness_matrix(c,2));
+%     [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%         .5, upper_z, lower_z, lateral_bound, num_neighbors);
+%     robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%         upper_z, lower_z);
+%     disp(robustness_matrix(c,3));
+%     [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%         .75, upper_z, lower_z, lateral_bound, num_neighbors);
+%     robustness_matrix(c,4) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%         upper_z, lower_z);
+%     disp(robustness_matrix(c,4));
+%     [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%         1, upper_z, lower_z, lateral_bound, num_neighbors);
+%     robustness_matrix(c,5) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%         upper_z, lower_z);
+%     disp(robustness_matrix(c,5));
+% %     [pthObj,solnInfo] = plan(M_RRT,startPose,goalPose);
+% %     robustness_matrix(c,6) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+% %         upper_z, lower_z);
+% %     [pthObj,solnInfo] = plan(M_RRT_S,startPose,goalPose);
+% %     robustness_matrix(c,7) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+% %         upper_z, lower_z);
+%     disp(c);
 
 
 
-end
+%end
+
+% robustnessCalculator(pthObj_s.States, omap, lateral_bound, ...
+%     upper_z, lower_z)
+% robustnessCalculator(pthObj_v.States, omap, lateral_bound, ...
+%     upper_z, lower_z)
 
 % disp("robustness for threshold 1: ");
 % disp(robustness);
@@ -311,7 +343,6 @@ end
 function [neighbors] = biasStep(startingNode, sample, k, bias, threshold, num_neighbors)
     neighbors = [];
     dist = inf;
-    nearest_neighbor = startingNode;
     nodelist = [startingNode];
     while size(nodelist) > 0
         possible_node = nodelist(end);
@@ -341,77 +372,3 @@ function [neighbors] = biasStep(startingNode, sample, k, bias, threshold, num_ne
         end
     end
 end
-
-%     if k>=10 && bias >= threshold
-%         nodelist = [startingNode];
-%         while size(nodelist) > 0
-%             possible_node = nodelist(end);
-%             nodelist = nodelist(1:end-1);
-%             nodelist = horzcat(nodelist, possible_node.children);
-%             node_dist = norm(possible_node.state - sample);
-%             if(size(neighbors,2) < 10)
-%                 possible_node.dist = node_dist;
-%                 temp = horzcat(neighbors, possible_node);
-%                 [~,ind] = sort([temp.dist]);
-%                 neighbors = temp(ind);
-%             else
-%                 if node_dist < neighbors(end).dist
-%                     neighbors = neighbors(1:end-1);
-%                     possible_node.dist = node_dist;
-%                     temp = horzcat(neighbors, possible_node);
-%                     [~,ind] = sort([temp.dist]);
-%                     neighbors = temp(ind);
-%                 end
-%             end
-%         end
-%     else
-%         nodelist = [startingNode];
-%         while size(nodelist) > 0
-%             possible_node = nodelist(end);
-%             nodelist = nodelist(1:end-1);
-%             nodelist = horzcat(nodelist, possible_node.children);
-%             node_dist = norm(possible_node.state - sample);
-%             if node_dist < dist
-%                 dist = node_dist;
-%                 nearest_neighbor = possible_node;
-%             end
-%         end
-%         neighbors = [nearest_neighbor];
-%     end
-% end
-    
-
-     %   unit_v = (sample-nearest_neighbor.state)/norm(sample-nearest_neighbor.state);
-      %  new_node_state = nearest_neighbor.state + step_size*unit_v;
-      %  if isStateValid(sv, new_node_state)
-      %      new_node = RRT_Node(new_node_state, nearest_neighbor);
-      %      nearest_neighbor.children = horzcat(nearest_neighbor.children, new_node);
-      %      if norm(goalPose - new_node_state) <= step_size
-      %          goalNode.parent = new_node;
-      %          new_node.children = horzcat(new_node.children,goalNode);
-      %          goalNode.hasParent = 1;
-      %          current = goalNode;
-      %          while current.hasParent
-      %              path = [path; current.state];
-      %              current = current.parent;
-      %          end
-      %          %add start node since there is no do-while in matlab
-      %          path = [path; startPose];
-      %          solnInfo.IsPathFound = 1;
-      %          path = flip(path);
-      %          break
-      %      end
-      %  end
-
-
-%function [robustness] = check_stl(new_node_state)
-%    path = [new_node_state];
-%    current = neighbors(i);
-%    while current.hasParent
-%        path = [path; current.state];
-%        current = current.parent;
-%    end
-%    path = [path; startPose];
- %   path = flip(path);
-    %check stl
-%end
