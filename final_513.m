@@ -65,35 +65,66 @@ num_neighbors = 20;
 
 %% Final Robustness
 % robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-%    upper_z, lower_z);
+%     upper_z, lower_z);
+robustness_matrix = zeros(50,7);
+for c = 1:50
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        0, upper_z, lower_z, lateral_bound, 20);
+    robustness_matrix(c,1) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        .25, upper_z, lower_z, lateral_bound, 20);
+    robustness_matrix(c,2) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        .5, upper_z, lower_z, lateral_bound, 20);
+    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        .75, upper_z, lower_z, lateral_bound, 20);
+    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        1, upper_z, lower_z, lateral_bound, 20);
+    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+    [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+        .5, upper_z, lower_z, lateral_bound, 20);
+    robustness_matrix(c,3) = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+        upper_z, lower_z);
+
+
+
+end
+
 % disp("robustness for threshold 1: ");
 % disp(robustness);
-plotting_data = [];
-starting_thresh = 1;
-ending_thresh = 11;
-num_neighbors_start = 5;
-num_neighbors_end = 10;
-matrix_data = zeros(num_neighbors_end-num_neighbors_start+1,11);
-
-for j = num_neighbors_start:num_neighbors_end
-    for i = starting_thresh:ending_thresh
-        [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-        i, upper_z, lower_z, lateral_bound, j);
-        
-        robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-        upper_z, lower_z);
-        
-        %fprintf('robustness for threshold %d and number of neighbors %d: %.2f\n', i, j, robustness);
-        %disp(robustness);
-        plotting_data = [plotting_data; [robustness, i, j]];
-        matrix_data(j-4,i) = robustness;
-    end
-    disp(j);
-end
-[X,Y] = meshgrid(starting_thresh:ending_thresh,num_neighbors_start:num_neighbors_end);
+% plotting_data = [];
+% starting_thresh = 1;
+% ending_thresh = 11;
+% num_neighbors_start = 5;
+% num_neighbors_end = 10;
+% matrix_data = zeros(num_neighbors_end-num_neighbors_start+1,11);
+% 
+% for j = num_neighbors_start:num_neighbors_end
+%     for i = starting_thresh:1:ending_thresh
+%         [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
+%         i/10, upper_z, lower_z, lateral_bound, j);
+%         
+%         robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
+%         upper_z, lower_z);
+%         
+%         %fprintf('robustness for threshold %d and number of neighbors %d: %.2f\n', i, j, robustness);
+%         %disp(robustness);
+%         plotting_data = [plotting_data; [robustness, i, j]];
+%         matrix_data(j-4,i) = robustness;
+%     end
+%     disp(j);
+% end
+% [X,Y] = meshgrid(starting_thresh:ending_thresh,num_neighbors_start:num_neighbors_end);
 %X = num_neighbors_start:num_neighbors_end;
 %Y = starting_thresh:ending_thresh;
-surf(X, Y, matrix_data);
+%surf(X, Y, matrix_data);
 %scatter3(plotting_data(:,3), plotting_data(:,2), plotting_data(:,1), "filled");
 %writematrix(plotting_data, 'plotted_data.xls');
 
