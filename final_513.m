@@ -5,13 +5,13 @@
 %% Set RNG seed for repeatable result
 %rng(1,"twister");
 
+
+%% Map Configuration
 mapData = load("uavMapCityBlock.mat","omap");
 omap = mapData.omap;
-% Consider unknown spaces to be unoccupied
 omap.FreeThreshold = omap.OccupiedThreshold;
-%With or without inflate?
-%inflate(omap,1);
 
+%% Initial Grid 
 startPose = [194 107 20 0 0 0 1];
 dropOffPose = [94 156 52 0 0 0 1];
 goalPose = [76 40 70 0 0 0 1];
@@ -25,7 +25,7 @@ scatter3(hMap,goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
 hold off
 view([-31 63])
 
-%% custom state space -> we have to see about validator map
+%% Custom State Space and State Validator Objects
 % custom STL-RRT compared agaisnt the out of the box RRT
 % interpolation/connection of waypoints
 
@@ -36,55 +36,18 @@ qrss = stateSpaceSE3([0 200; 0 200; 100 200; ...
     Inf Inf]);
 
 sv = validatorOccupancyMap3D(qrss,"Map",omap);
-%sv.ValidationDistance = 0.1;
 sv.ValidationDistance = 5;
 
-% threshold_o = [(goalPose-0.5)' (goalPose+0.5)'; -pi pi];
-% setWorkspaceGoalRegion(qrss,goalPose,threshold_o);
-
-
-%% Parameters
+%% STL Parameters
 threshold = .5;
 upper_z = 120;
 lower_z = 8;
 lateral_bound = 8;
 num_neighbors = 20;
 
-%% RRT
-% [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
-%    threshold, upper_z, lower_z, lateral_bound, num_neighbors);
 
-%% Error checking
+%% Robustness Histrogram Data
 
-%stateCheck = isStateValid(sv, pthObj.States)
-
-
-% for i = 1:size(pthObj.States,1)-1
-%     %disp(pthObj.States(i,:));
-%     [isValid, lastValid] = isMotionValid(sv, pthObj.States(i,:), pthObj.States(i+1,:));
-%     if isValid == 0
-%         disp("error");
-%     end
-% end
-
-%% means
-means = mean(robustness_matrix);
-writematrix(robustness_matrix, 'robustness_matrix.xls');
-
-%% Final Robustness
-% robustness = robustnessCalculator(pthObj.States, omap, lateral_bound, ...
-%     upper_z, lower_z);
-% M_RRT = plannerRRT(qrss,sv);
-% M_RRT.MaxConnectionDistance = 20;
-% M_RRT.GoalBias = 0.10;  
-% M_RRT.MaxIterations = 4000;
-% M_RRT.GoalReachedFcn = @(~,x,y)(norm(x(1:3)-y(1:3)) < 5);
-% 
-% M_RRT_S = plannerRRTStar(qrss,sv);
-% M_RRT_S.MaxConnectionDistance = 20;
-% M_RRT_S.GoalBias = 0.10;  
-% M_RRT_S.MaxIterations = 4000;
-% M_RRT_S.GoalReachedFcn = @(~,x,y)(norm(x(1:3)-y(1:3)) < 5);
 % robustness_matrix = zeros(50,7);
 % for c = 1:200
 %     [pthObj, solnInfo] = rrt_stl(qrss, sv, startPose, goalPose, 4000, 20, omap, ...
@@ -120,22 +83,26 @@ writematrix(robustness_matrix, 'robustness_matrix.xls');
 % %         upper_z, lower_z);
 %     disp(c);
 
-
-
 %end
+
+%% Mean data from Histograms
+%robustness_matrix = readmatrix('robustness_matrix.xls');
+%means = mean(robustness_matrix);
+% writematrix(robustness_matrix, 'robustness_matrix.xls');
+
+
+%% Robustness Calculation for Matlab RRT and RRT*
 
 % robustnessCalculator(pthObj_s.States, omap, lateral_bound, ...
 %     upper_z, lower_z)
 % robustnessCalculator(pthObj_v.States, omap, lateral_bound, ...
 %     upper_z, lower_z)
 
-% disp("robustness for threshold 1: ");
-% disp(robustness);
-% plotting_data = [];
+%% Surface Plot Varying Number of Neighbors and Biasing
 % starting_thresh = 1;
 % ending_thresh = 11;
 % num_neighbors_start = 5;
-% num_neighbors_end = 10;
+% num_neighbors_end = 15;
 % matrix_data = zeros(num_neighbors_end-num_neighbors_start+1,11);
 % 
 % for j = num_neighbors_start:num_neighbors_end
@@ -148,40 +115,134 @@ writematrix(robustness_matrix, 'robustness_matrix.xls');
 %         
 %         %fprintf('robustness for threshold %d and number of neighbors %d: %.2f\n', i, j, robustness);
 %         %disp(robustness);
-%         plotting_data = [plotting_data; [robustness, i, j]];
+%         %plotting_data = [plotting_data; [robustness, i, j]];
 %         matrix_data(j-4,i) = robustness;
 %     end
 %     disp(j);
 % end
 % [X,Y] = meshgrid(starting_thresh:ending_thresh,num_neighbors_start:num_neighbors_end);
-%X = num_neighbors_start:num_neighbors_end;
-%Y = starting_thresh:ending_thresh;
-%surf(X, Y, matrix_data);
-%scatter3(plotting_data(:,3), plotting_data(:,2), plotting_data(:,1), "filled");
-%writematrix(plotting_data, 'plotted_data.xls');
+% surf(X, Y, matrix_data);
+% title('Robustness Values While Varying Number of Neighbors and Robustness Biasing');
+% xlabel('Bias');
+% ylabel('Number of Neighbors');
+% zlabel('Robustness');
+%writematrix(matrix_data, 'surface_plot.xls');
+%% RRT-Vanilla
+vanilla_path = [];
+[pthObj_vanilla_1, solnInfo_vanilla_1] = rrt_stl(qrss, sv, startPose, dropOffPose, 4000, 20, omap, ...
+   1, upper_z, lower_z, lateral_bound, num_neighbors);
+vanilla_path = [vanilla_path ; pthObj_vanilla_1.States];
+[pthObj_vanilla_2, solnInfo_vanilla_2] = rrt_stl(qrss, sv, dropOffPose, goalPose, 4000, 20, omap, ...
+   1, upper_z, lower_z, lateral_bound, num_neighbors);
+vanilla_path = vertcat(vanilla_path(1:end-1,:), pthObj_vanilla_2.States);
+vanilla_robustness = robustnessCalculator(vanilla_path, omap, lateral_bound, ...
+    upper_z, lower_z);
 
-%     %% Plot
-%     if (solnInfo.IsPathFound)
-%         figure("Name","OriginalPath")
-%         % Visualize the 3-D map
-%         show(omap)
-%         hold on
-%         scatter3(startPose(1),startPose(2),startPose(3),30,"red","filled")
-%         scatter3(goalPose(1),goalPose(2),goalPose(3),30,"green","filled")
-%         
-%         hReference = plot3(pthObj.States(:,1), ...
-%             pthObj.States(:,2), ...
-%             pthObj.States(:,3), ...
-%             "LineWidth",2,"Color","g");
-%       
-%         legend(hReference,"Reference","Location","best")
-%         hold off
-%         view([-31 63])
+%% RRT-Robustness
+robust_path = [];
+[pthObj_robustness_1, solnInfo_robustness_1] = rrt_stl(qrss, sv, startPose, dropOffPose, 4000, 20, omap, ...
+   0, upper_z, lower_z, lateral_bound, num_neighbors);
+robust_path = [robust_path ; pthObj_robustness_1.States];
+[pthObj_robustness_2, solnInfo_robustness_2] = rrt_stl(qrss, sv, dropOffPose, goalPose, 4000, 20, omap, ...
+   0, upper_z, lower_z, lateral_bound, num_neighbors);
+robust_path = vertcat(robust_path(1:end-1,:), pthObj_robustness_2.States);
+robust_robustness = robustnessCalculator(robust_path, omap, lateral_bound, ...
+    upper_z, lower_z);
+
+%% Matlab RRT
+m_vanilla_robustness = robustnessCalculator(m_vanilla_path, omap, lateral_bound, ...
+    upper_z, lower_z);
+%% Error checking
+
+%stateCheck = isStateValid(sv, pthObj.States)
+
+
+% for i = 1:size(pthObj.States,1)-1
+%     %disp(pthObj.States(i,:));
+%     [isValid, lastValid] = isMotionValid(sv, pthObj.States(i,:), pthObj.States(i+1,:));
+%     if isValid == 0
+%         disp("error");
 %     end
-%end
+% end
+
+%% Grid Results Vanilla
+if (solnInfo_vanilla_1.IsPathFound && solnInfo_vanilla_2.IsPathFound)
+    figure("Name","Vanilla Path")
+    % Visualize the 3-D map
+    show(omap)
+    hold on
+    scatter3(startPose(1),startPose(2),startPose(3),30,"red","filled")
+    scatter3(dropOffPose(1),dropOffPose(2),dropOffPose(3),30,"red","filled")
+    scatter3(goalPose(1),goalPose(2),goalPose(3),30,"red","filled")
+    
+    hReference_1 = plot3(pthObj_vanilla_1.States(:,1), ...
+        pthObj_vanilla_1.States(:,2), ...
+        pthObj_vanilla_1.States(:,3), ...
+        pthObj_vanilla_2.States(:,1), ...
+        pthObj_vanilla_2.States(:,2), ...
+        pthObj_vanilla_2.States(:,3), ...
+        "LineWidth",2,"Color","g");
+
+
+  
+    %legend(hReference_1,"Reference","Location","best")
+    hold off
+    view([-31 63])
+end
+
+
+%% Grid Results Robustness
+
+if (solnInfo_robustness_1.IsPathFound && solnInfo_robustness_2.IsPathFound)
+    figure("Name","Rboustness Path")
+    % Visualize the 3-D map
+    show(omap)
+    hold on
+    scatter3(startPose(1),startPose(2),startPose(3),30,"red","filled")
+    scatter3(dropOffPose(1),dropOffPose(2),dropOffPose(3),30,"red","filled")
+    scatter3(goalPose(1),goalPose(2),goalPose(3),30,"red","filled")
+    
+    hReference = plot3(pthObj_robustness_1.States(:,1), ...
+        pthObj_robustness_1.States(:,2), ...
+        pthObj_robustness_1.States(:,3), ...
+        pthObj_robustness_2.States(:,1), ...
+        pthObj_robustness_2.States(:,2), ...
+        pthObj_robustness_2.States(:,3), ...
+        "LineWidth",2,"Color","g");
+
+  
+    %legend(hReference,"Robustness Path","Location","best")
+    hold off
+    view([-31 63])
+end
+
+
+%% Grid Results Vanilla Matlab
+if (solnInfo_vanilla_1.IsPathFound && solnInfo_vanilla_2.IsPathFound)
+    figure("Name","Matlab Path")
+    % Visualize the 3-D map
+    show(omap)
+    hold on
+    scatter3(startPose(1),startPose(2),startPose(3),30,"red","filled")
+    scatter3(dropOffPose(1),dropOffPose(2),dropOffPose(3),30,"red","filled")
+    scatter3(goalPose(1),goalPose(2),goalPose(3),30,"red","filled")
+    
+    hReference_1 = plot3(pthObj_m_vanilla_1.States(:,1), ...
+        pthObj_m_vanilla_1.States(:,2), ...
+        pthObj_m_vanilla_1.States(:,3), ...
+        pthObj_m_vanilla_2.States(:,1), ...
+        pthObj_m_vanilla_2.States(:,2), ...
+        pthObj_m_vanilla_2.States(:,3), ...
+        "LineWidth",2,"Color","g");
+
+
+  
+    %legend(hReference_1,"Reference","Location","best")
+    hold off
+    view([-31 63])
+end
 
 %% Functions
-
 
 function [pthObj, solnInfo] = rrt_stl(ss, sv, startPose, goalPose, ...
     max_iter, step_size, omap, threshold, upper_z, lower_z, lateral_bound, num_neighbors)
@@ -317,9 +378,9 @@ function [distance_arr] = distanceCalculator(possible_path, omap, lateral_bound)
         [intersectionPts_r,isOccupied_r] = rayIntersection(omap,possible_path(d,:),directions_roll,maxrange);
         [intersectionPts_y,isOccupied_y] = rayIntersection(omap,possible_path(d,:),directions_yaw,maxrange);
 
-        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_p, numRays, isOccupied_p, lateral_bound, d)];
-        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_r, numRays, isOccupied_r, lateral_bound, d)];
-        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_y, numRays, isOccupied_y, lateral_bound, d)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_p, numRays, isOccupied_p, lateral_bound, d, maxrange)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_r, numRays, isOccupied_r, lateral_bound, d, maxrange)];
+        min_ray_arr = [min_ray_arr; distanceRobustness(possible_path, intersectionPts_y, numRays, isOccupied_y, lateral_bound, d, maxrange)];
         distance_arr = [distance_arr; min(min_ray_arr)];
     end
 end
@@ -327,8 +388,8 @@ end
 
 
 
-function [min_ray_dist] = distanceRobustness(possible_path, intersectionPts, numRays, isOccupied, lateral_bound, index)
-min_ray_dist = 50;
+function [min_ray_dist] = distanceRobustness(possible_path, intersectionPts, numRays, isOccupied, lateral_bound, index, maxrange)
+    min_ray_dist = maxrange;
     for n = 1:numRays
         if isOccupied(n)
             ray_dist = norm(intersectionPts(n, :) - [possible_path(index,1), possible_path(index,2), possible_path(index,3)]) - lateral_bound;
